@@ -1,6 +1,8 @@
 package Chapter2
 import chisel3._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import chiseltest._
+import org.scalatest.flatspec.AnyFlatSpec
 
 /*
 自定义一个bundle类，然后通过asUint method将里面的字段合并
@@ -25,12 +27,19 @@ class BundleWithVec extends Bundle {
   val foo = UInt(4.W) //高位
   val bar = Vec(2,UInt(5.W))  //低位
 }
+/*
+为了显示BundleWithVec中合成的值，只好在增加一个io，将uint送到out，然后由后面的BasicTest进行单元测试
+ */
 class WrapBundleWithVec extends Module{
+  val io = IO(new Bundle{
+    val out = Output(UInt(14.W))
+  })
   val bundle = Wire(new BundleWithVec)
   bundle.foo := 0x0.U
-  bundle.bar(0) := 0x0.U
-  bundle.bar(1) := 0x1.U
+  bundle.bar(0) := 0x1.U
+  bundle.bar(1) := 0x0.U
   val uint = bundle.asUInt
+  io.out := uint
 }
 /*
 新建一个object用于执行测试类
@@ -47,6 +56,19 @@ object Bundle extends App{
     val BundleWithVecObj = new WrapBundleWithVec
     println(BundleWithVecObj.uint)
     BundleWithVecObj})))
+}
+
+class BasicTest extends AnyFlatSpec with ChiselScalatestTester {
+  behavior of "WrapBundleWithVec"
+  // test class body here
+  it should "check uint from WrapBundleWithVec" in {
+    // test case body here
+    test(new WrapBundleWithVec) { c =>
+      // test body here
+      c.clock.step()
+      println(c.io.out.peek().litValue)
+    }
+  }
 }
 
 /*
@@ -82,3 +104,29 @@ object CatBundleObj extends App{
 
 //add some commit modification
 //add more modification for commit
+
+class WrapCatBundle extends Module{
+  val io = IO(new Bundle {
+    val a = Output(UInt(2.W))
+    val b = Output(UInt(4.W))
+    val c = Output(UInt(3.W))
+  })
+  val z = Wire(UInt(9.W))
+  z := 0x1ff.U
+  val unpacked = z.asTypeOf(new CatBundle)
+  io.a := unpacked.a
+  io.b := unpacked.b
+  io.c := unpacked.c
+}
+class AnotherBasicTest extends AnyFlatSpec with ChiselScalatestTester {
+  behavior of "WrapBundleWithVec"
+  // test class body here
+  it should "check a,b,c from CatBundle" in {
+    // test case body here
+    test(new WrapCatBundle) { c =>
+      // test body here
+      c.clock.step()
+      println(c.io.a.peek().litValue.toString(2) + " " +c.io.b.peek().litValue.toString(2) + " " + c.io.c.peek().litValue.toString(2))
+    }
+  }
+}

@@ -38,5 +38,34 @@ class BasicTestRegBundle extends AnyFlatSpec with ChiselScalatestTester {
       println(c.io.out.peek().litValue)
     }
   }
-  println((new ChiselStage).emitVerilog(new WrapRegBundle))
+//  println((new ChiselStage).emitVerilog(new WrapRegBundle))
+}
+
+class WrapRegNext extends Module{
+  val io = IO(new Bundle() {
+    val in = Input(UInt(8.W))
+    val out = Output(UInt(8.W))
+  })
+
+  /*
+  RegNext返回一个位宽可以自动推断的寄存器。有两个版本，一个不带初始化值，一个带初始化值
+  用于构建shift register
+   */
+  val regA = RegNext(io.in)
+  val regB = RegNext(regA,0.U)
+  val regC = RegNext(regB,0.U)
+  io.out := regC
+}
+class BasicTestRegNext extends AnyFlatSpec with ChiselScalatestTester{
+  behavior of "WrapRegNext"
+  // test class body here
+  it should "check behavior" in {
+    test(new WrapRegNext){c=>
+      (1 to 10) foreach(n=>{
+        c.io.in.poke(n)
+        c.clock.step()
+        println(s"$n : output is " + c.io.out.peek().litValue)
+      })
+    }
+  }
 }

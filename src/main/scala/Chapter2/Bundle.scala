@@ -56,6 +56,12 @@ object Bundle extends App{
     val BundleWithVecObj = new WrapBundleWithVec
     println(BundleWithVecObj.uint)
     BundleWithVecObj})))
+
+  /*
+  在jupyter notebook 中常用的getVerilog method是bootcamp中独有的method，在idea中不能使用
+  但我们可以用emitVerilog实现同样的功能
+   */
+  println((new ChiselStage).emitVerilog(new WrapBundleWithVec))
 }
 
 class BasicTest extends AnyFlatSpec with ChiselScalatestTester {
@@ -127,6 +133,8 @@ class AnotherBasicTest extends AnyFlatSpec with ChiselScalatestTester {
       // test body here
       c.clock.step()
       println(c.io.a.peek().litValue.toString(2) + " " +c.io.b.peek().litValue.toString(2) + " " + c.io.c.peek().litValue.toString(2))
+      println("Its verilog :")
+      println((new ChiselStage).emitVerilog(new WrapCatBundle))
     }
   }
 }

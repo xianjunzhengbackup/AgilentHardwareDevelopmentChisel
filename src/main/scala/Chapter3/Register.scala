@@ -1,7 +1,7 @@
 package Chapter3
 import chisel3._
 import chisel3.stage.ChiselStage
-import chisel3.util.RegEnable
+import chisel3.util.{RegEnable, ShiftRegister}
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -168,6 +168,60 @@ class BasicTestRegEnable extends AnyFlatSpec with ChiselScalatestTester{
       c.clock.step()
       println("output with Init is " + c.io.outWithInit.peek().litValue)
       println("output with NoInit is " + c.io.outNoInit.peek().litValue)
+    }
+  }
+}
+
+/*
+移位寄存器。它也有两种apply method
+def apply[T <: Data](in: T, n: Int, en: Bool = true.B): T
+def apply[T <: Data](in: T, n: Int, resetData: T, en: Bool): T
+参数in，就是待移位的数据源，n是需要延迟的周期数（也可以理解为在数据的入口in，与出口之间有几个寄存器），en是移位的使能信号
+
+有意思的是她的实现方式
+ShiftRegister(in,3)
+RegEnable(ShiftRegister(in,2),en)
+RegEnable(RegEnable(ShiftRegister(in,1),en),en)
+RegEnable(RegEnable(RegEnable(ShiftRegister(in,0),en),en),en)
+RegEnable(RegEnable(RegEnable(in,en),en),en)
+def apply[T <: Data](in: T, n: Int, en: Bool = true.B): T ={
+  if(n != 0) {
+    RegEnable(apply(in,n-1,en),en)
+  } else {in}
+}
+
+关于时序应该这么理解，ShiftRegister以及RegEnable都是在时钟的上升沿同时当enable为高电平时，将数据源的信号推送到输出端
+ */
+class WrapShiftRegister extends Module{
+  val io = IO(new Bundle() {
+    val in = Input(UInt(8.W))
+    val enable = Input(Bool())
+    val out = Output(Vec(3,UInt(8.W)))
+  })
+
+  val shiftRegisterArray = (1 to 3) map(n=>ShiftRegister(io.in,n,0xff.U(8.W),io.enable))
+  (1 to 3) foreach(n=> io.out(n-1):= shiftRegisterArray(n-1))
+}
+
+class BasicTestShiftRegister extends AnyFlatSpec with ChiselScalatestTester{
+  behavior of "ShiftRegister"
+  // test class body here
+  it should "将检查ShiftRegister的输出(分别延迟 1 2 3 个时钟" in {
+    test(new WrapShiftRegister) {c=>
+      c.reset.poke(true.B)
+      c.clock.step()
+      c.reset.poke(false.B)
+      c.io.enable.poke(false)
+      c.clock.step()
+      c.io.enable.poke(true)
+      (1 to 10) foreach(n=>{
+        //这里时钟的上升沿的同时输入端更新信号，使能信号一直为高电平，所以在时钟的上升沿到来的时候输出都会更新。相当于少了一个delay
+        c.io.in.poke(n)
+        c.clock.step()
+        println(s"$n "+"output for shift register delayed by x1 clock:"+c.io.out(0).peek().litValue)
+        println("output for shift register delayed by x2 clock:"+c.io.out(1).peek().litValue)
+        println("output for shift register delayed by x3 clock:"+c.io.out(2).peek().litValue)
+      })
     }
   }
 }

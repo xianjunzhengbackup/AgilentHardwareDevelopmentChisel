@@ -1,6 +1,7 @@
 package Chapter3
 import chisel3._
 import chisel3.stage.ChiselStage
+import chisel3.util.RegEnable
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -50,6 +51,9 @@ class WrapRegNext extends Module{
   /*
   RegNext返回一个位宽可以自动推断的寄存器。有两个版本，一个不带初始化值，一个带初始化值
   用于构建shift register
+  def apply[T <: Data](next: T, init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T
+  def apply[T <: Data](next: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T
+  还是寄存器，只不过指定了寄存器的输入来自哪里
    */
   val regA = RegNext(io.in)
   val regB = RegNext(regA,0.U)
@@ -66,6 +70,104 @@ class BasicTestRegNext extends AnyFlatSpec with ChiselScalatestTester{
         c.clock.step()
         println(s"$n : output is " + c.io.out.peek().litValue)
       })
+    }
+  }
+}
+
+/*
+RegInit 复位时可以到指定值的寄存器
+有两种apply method
+第一种 单参数模式 def apply[T <: Data](init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T
+第二种 双参数模式 def apply[T <: Data](t: T, init: T)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T
+还是寄存器，只是增加了复位时的初始化值
+ */
+class WrapRegInit extends Module{
+  val io = IO(new Bundle() {
+    val in = Input(UInt(8.W))
+    val out = Output(UInt(8.W))
+  })
+  val r1 = RegInit(1.U) //单参数模式 位宽自动推断为1
+  val r2 = RegInit(1.U(8.W))  //位宽为8
+
+  val r3 = RegInit(UInt(8.W),9.U) //双参数模式 第一个参数表示数据类型，第二个是复位时的value
+  r3 := io.in
+  io.out := r3
+
+}
+
+class BasicTestRegInit extends AnyFlatSpec with ChiselScalatestTester {
+  behavior of "RegInit"
+  // test class body here
+  it should "将检查RegInit的输出" in {
+    test(new WrapRegInit) {c=>
+      (1 to 10) foreach(n=>{
+        c.io.in.poke(n)
+        c.clock.step()
+        println(s"$n:output is "+c.io.out.peek().litValue)
+      })
+      c.reset.poke(true.B)
+      c.clock.step()
+      println(s"After reset:output is "+c.io.out.peek().litValue)
+    }
+  }
+  println((new ChiselStage).emitVerilog(new WrapRegInit))
+}
+
+/*
+带使能的寄存器
+也有两种apply method。与RegNext一样，两种模式都指定了数据的来源
+第一种def apply[T <: Data](next: T, init: T, enable: Bool): T ，带初始化值
+第二种def apply[T <: Data](next: T, enable: Bool): T ，不带初始化值
+ */
+class WrapRegEnable extends Module{
+  val io = IO(new Bundle() {
+    val in = Input(UInt(8.W))
+    val enable = Input(Bool())
+    val outWithInit = Output(UInt(8.W))
+    val outNoInit = Output(UInt(8.W))
+  })
+
+  val r1 = RegEnable(io.in,255.U(8.W),io.enable)
+  io.outWithInit := r1
+
+  val r2 = RegEnable(io.in,io.enable)
+  io.outNoInit := r2
+}
+
+class BasicTestRegEnable extends AnyFlatSpec with ChiselScalatestTester{
+  behavior of "RegEnable"
+  // test class body here
+  it should "将检查RegEnable的输出" in {
+    test(new WrapRegEnable){c=>
+      (1 to 10) foreach(n=>{
+        c.io.in.poke(n)
+        println(s"$n:")
+        if(n%2==0){print("enable is off. "); c.io.enable.poke(false)}
+        else {print("enable is on. ");c.io.enable.poke(true)}
+        c.clock.step()
+        println("output with Init is "+c.io.outWithInit.peek().litValue)
+        println("output with NoInit is "+c.io.outNoInit.peek().litValue)
+      })
+
+      println("After reset:")
+      c.reset.poke(true.B)
+      println("Enable is off.")
+      c.io.enable.poke(false)
+      c.clock.step()
+      println("output with Init is " + c.io.outWithInit.peek().litValue)
+      println("output with NoInit is " + c.io.outNoInit.peek().litValue)
+
+      println("Enable is ON.")
+      c.io.enable.poke(true)
+      c.clock.step()
+      println("output with Init is " + c.io.outWithInit.peek().litValue)
+      println("output with NoInit is " + c.io.outNoInit.peek().litValue)
+
+      println("Enable is ON.")
+      c.io.enable.poke(true)
+      c.clock.step()
+      println("output with Init is " + c.io.outWithInit.peek().litValue)
+      println("output with NoInit is " + c.io.outNoInit.peek().litValue)
     }
   }
 }
